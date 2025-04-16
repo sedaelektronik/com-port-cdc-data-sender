@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Web Serial API - Data Sender</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input, button { margin: 10px 0; display: block; }
+    #log { background: #f0f0f0; padding: 10px; height: 200px; overflow-y: auto; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h2>COM Port CDC Data Sender</h2>
+
+  <button id="connectBtn">Connect (Select COM Port)</button>
+  <input type="text" id="dataInput" placeholder="Data to be sent">
+  <button id="sendBtn" disabled>Send Data</button>
+
+  <h3>Log:</h3>
+  <div id="log"></div>
+
+  <script>
+    let port;
+    let writer;
+    let reader;
+    let keepReading = false;
+
+    const logEl = document.getElementById('log');
+    const log = msg => {
+      logEl.textContent += msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    // Bağlan
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 }); // Baudrate ayarı
+
+        const encoder = new TextEncoderStream();
+        encoder.readable.pipeTo(port.writable);
+        writer = encoder.writable.getWriter();
+
+        const decoder = new TextDecoderStream();
+        port.readable.pipeTo(decoder.writable);
+        reader = decoder.readable.getReader();
+
+        keepReading = true;
+        readLoop();
+
+        document.getElementById('sendBtn').disabled = false;
+        log("✅ The connection is established.");
+      } catch (err) {
+        log("❌ Connection error: " + err);
+      }
+    });
+
+    // Veri gönder
+    document.getElementById('sendBtn').addEventListener('click', async () => {
+      const text = document.getElementById('dataInput').value;
+      try {
+        await writer.write(text + '\n'); // İsteğe bağlı olarak '\n' kullanılabilir
+        log("📤 Sending: " + text);
+      } catch (err) {
+        log("❌ Sending error: " + err);
+      }
+    });
+
+    // Gelen veriyi oku
+    async function readLoop() {
+      try {
+        while (keepReading) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (value) {
+            log("📥 Receipt: " + value.trim());
+          }
+        }
+      } catch (err) {
+        log("❌ Reading error: " + err);
+      }
+    }
+  </script>
+</body>
+</html>
